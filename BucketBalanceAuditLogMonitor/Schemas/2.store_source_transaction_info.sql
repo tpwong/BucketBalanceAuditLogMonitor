@@ -1,39 +1,22 @@
--- 函式：將來源表的資訊儲存到事務級別的變數中
--- 這個函式保持不變，因為它的單一職責做得很好。
-CREATE OR REPLACE FUNCTION earning.store_source_transaction_info()
+CREATE OR REPLACE FUNCTION public.store_source_info_from_trigger()
 RETURNS TRIGGER AS $$
 DECLARE
-    pk_json JSONB;
-    payload JSONB;
+    v_pk_info JSONB;
+    v_pk_columns TEXT[] := TG_ARGV; -- 直接獲取所有參數作為欄位名陣列
 BEGIN
-    -- 根據不同的表結構，建立對應的 PK JSON 物件
-    IF (TG_TABLE_NAME = 'bucket_earned_transactions') THEN
-        pk_json := jsonb_build_object(
-            'tran_id', NEW.tran_id,
-            'bucket_type', NEW.bucket_type,
-            'main_id', NEW.main_id,
-            'earning_rule_id', NEW.earning_rule_id,
-            'gaming_dt', NEW.gaming_dt
-        );
-    ELSIF (TG_TABLE_NAME = 'bucket_redeem_transactions') THEN
-        pk_json := jsonb_build_object(
-            'id', NEW.id,
-            'gaming_dt', NEW.gaming_dt
-        );
-    ELSIF (TG_TABLE_NAME = 'bucket_adjust_transactions') THEN
-        pk_json := jsonb_build_object(
-            'id', NEW.id,
-            'gaming_dt', NEW.gaming_dt
-        );
+    -- 動態地從 NEW 紀錄中，根據傳入的欄位名列表，建立一個 JSON 物件
+    SELECT jsonb_object_agg(key, value)
+    INTO v_pk_info
+    FROM jsonb_each_text(to_jsonb(NEW)) AS j(key, value)
+    WHERE j.key = ANY(v_pk_columns);
+
+    -- 如果成功產生了 JSON，才設定事務變數
+    IF v_pk_info IS NOT NULL AND v_pk_info != '{}'::jsonb THEN
+        PERFORM set_config('my_app.source_info', jsonb_build_object(
+            'source_table', TG_TABLE_NAME, -- 記錄實際的子表名，這很好！
+            'source_pk', v_pk_info
+        )::text, false);
     END IF;
-
-    -- 建立完整的 payload
-    payload := jsonb_build_object(
-        'source_table', TG_TABLE_NAME,
-        'source_pk', pk_json
-    );
-
-    PERFORM set_config('my_app.source_info', payload::TEXT, false);
 
     RETURN NEW;
 END;
@@ -43,17 +26,29 @@ $$ LANGUAGE plpgsql;
 
 
 -- 1. 在三個來源表上建立觸發器
-DROP TRIGGER IF EXISTS earned_store_source_trigger ON earning.bucket_earned_transactions;
-CREATE TRIGGER earned_store_source_trigger
-AFTER INSERT ON earning.bucket_earned_transactions
-FOR EACH ROW EXECUTE FUNCTION earning.store_source_transaction_info();
+-- 為 bucket_earned_transactions 綁定觸發器
+DROP TRIGGER IF EXISTS trigger_store_source_earned ON earning.bucket_earned_transactions;
+CREATE TRIGGER trigger_store_source_earned
+BEFORE INSERT ON earning.bucket_earned_transactions
+FOR EACH ROW
+EXECUTE FUNCTION public.store_source_info_from_trigger(
+    'tran_id', 'bucket_type', 'main_id', 'earning_rule_id', 'gaming_dt'
+);
 
-DROP TRIGGER IF EXISTS redeem_store_source_trigger ON earning.bucket_redeem_transactions;
-CREATE TRIGGER redeem_store_source_trigger
-AFTER INSERT ON earning.bucket_redeem_transactions
-FOR EACH ROW EXECUTE FUNCTION earning.store_source_transaction_info();
+-- 為 bucket_redeem_transactions 綁定觸發器
+DROP TRIGGER IF EXISTS trigger_store_source_redeem ON earning.bucket_redeem_transactions;
+CREATE TRIGGER trigger_store_source_redeem
+BEFORE INSERT ON earning.bucket_redeem_transactions
+FOR EACH ROW
+EXECUTE FUNCTION public.store_source_info_from_trigger(
+    'id', 'gaming_dt'
+);
 
-DROP TRIGGER IF EXISTS adjust_store_source_trigger ON earning.bucket_adjust_transactions;
-CREATE TRIGGER adjust_store_source_trigger
-AFTER INSERT ON earning.bucket_adjust_transactions
-FOR EACH ROW EXECUTE FUNCTION earning.store_source_transaction_info();
+-- 為 bucket_adjust_transactions 綁定觸發器
+DROP TRIGGER IF EXISTS trigger_store_source_adjust ON earning.bucket_adjust_transactions;
+CREATE TRIGGER trigger_store_source_adjust
+BEFORE INSERT ON earning.bucket_adjust_transactions
+FOR EACH ROW
+EXECUTE FUNCTION public.store_source_info_from_trigger(
+    'id', 'gaming_dt'
+);
