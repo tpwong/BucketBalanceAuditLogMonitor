@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION public.store_source_info_from_trigger()
+CREATE OR REPLACE FUNCTION earning.store_source_info_from_trigger()
 RETURNS TRIGGER AS $$
 DECLARE
     v_pk_info JSONB;
@@ -31,7 +31,7 @@ DROP TRIGGER IF EXISTS trigger_store_source_earned ON earning.bucket_earned_tran
 CREATE TRIGGER trigger_store_source_earned
 BEFORE INSERT ON earning.bucket_earned_transactions
 FOR EACH ROW
-EXECUTE FUNCTION public.store_source_info_from_trigger(
+EXECUTE FUNCTION earning.store_source_info_from_trigger(
     'tran_id', 'bucket_type', 'main_id', 'earning_rule_id', 'gaming_dt'
 );
 
@@ -40,7 +40,7 @@ DROP TRIGGER IF EXISTS trigger_store_source_redeem ON earning.bucket_redeem_tran
 CREATE TRIGGER trigger_store_source_redeem
 BEFORE INSERT ON earning.bucket_redeem_transactions
 FOR EACH ROW
-EXECUTE FUNCTION public.store_source_info_from_trigger(
+EXECUTE FUNCTION earning.store_source_info_from_trigger(
     'id', 'gaming_dt'
 );
 
@@ -49,6 +49,6 @@ DROP TRIGGER IF EXISTS trigger_store_source_adjust ON earning.bucket_adjust_tran
 CREATE TRIGGER trigger_store_source_adjust
 BEFORE INSERT ON earning.bucket_adjust_transactions
 FOR EACH ROW
-EXECUTE FUNCTION public.store_source_info_from_trigger(
+EXECUTE FUNCTION earning.store_source_info_from_trigger(
     'id', 'gaming_dt'
 );
