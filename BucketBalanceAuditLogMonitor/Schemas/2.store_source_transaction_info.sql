@@ -1,6 +1,6 @@
 -- 函式：將來源表的資訊儲存到事務級別的變數中
 -- 這個函式保持不變，因為它的單一職責做得很好。
-CREATE OR REPLACE FUNCTION public.store_source_transaction_info()
+CREATE OR REPLACE FUNCTION earning.store_source_transaction_info()
 RETURNS TRIGGER AS $$
 DECLARE
     pk_json JSONB;
@@ -47,14 +47,14 @@ $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS earned_store_source_trigger ON earning.bucket_earned_transactions;
 CREATE TRIGGER earned_store_source_trigger
 AFTER INSERT ON earning.bucket_earned_transactions
-FOR EACH ROW EXECUTE FUNCTION public.store_source_transaction_info();
+FOR EACH ROW EXECUTE FUNCTION earning.store_source_transaction_info();
 
 DROP TRIGGER IF EXISTS redeem_store_source_trigger ON earning.bucket_redeem_transactions;
 CREATE TRIGGER redeem_store_source_trigger
 AFTER INSERT ON earning.bucket_redeem_transactions
-FOR EACH ROW EXECUTE FUNCTION public.store_source_transaction_info();
+FOR EACH ROW EXECUTE FUNCTION earning.store_source_transaction_info();
 
 DROP TRIGGER IF EXISTS adjust_store_source_trigger ON earning.bucket_adjust_transactions;
 CREATE TRIGGER adjust_store_source_trigger
 AFTER INSERT ON earning.bucket_adjust_transactions
-FOR EACH ROW EXECUTE FUNCTION public.store_source_transaction_info();
+FOR EACH ROW EXECUTE FUNCTION earning.store_source_transaction_info();

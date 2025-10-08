@@ -8,11 +8,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="Schemas\notify_bucket_balance_changes.sql" />
+    <None Remove="Schemas\3.notify_bucket_balance_changes.sql" />
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="Schemas\notify_bucket_balance_changes.sql" />
+    <Compile Include="Schemas\3.notify_bucket_balance_changes.sql" />
   </ItemGroup>
 
   <ItemGroup>

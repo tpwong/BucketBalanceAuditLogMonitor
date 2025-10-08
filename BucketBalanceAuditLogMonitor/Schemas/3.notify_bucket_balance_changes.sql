@@ -1,5 +1,5 @@
 ﻿-- 新的、簡化的函式，只負責寫入日誌
-CREATE OR REPLACE FUNCTION public.log_balance_change_with_context()
+CREATE OR REPLACE FUNCTION earning.log_balance_change_with_context()
 RETURNS TRIGGER AS $$
 DECLARE
     v_record_id BIGINT;
@@ -29,7 +29,7 @@ BEGIN
 
     -- *** 核心職責：將所有資訊寫入稽核日誌表 ***
     -- PostgreSQL 會自動將這筆紀錄插入到正確的日期子分區中
-    INSERT INTO public.bucket_balance_audit_log (
+    INSERT INTO earning.bucket_balance_audit_log (
         action,
         record_id,
         old_balance,

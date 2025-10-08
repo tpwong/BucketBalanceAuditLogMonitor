@@ -1,8 +1,8 @@
 -- 為了確保是全新的開始，先刪除舊表和相關函式
-DROP TABLE IF EXISTS public.bucket_balance_audit_log;
+DROP TABLE IF EXISTS earning.bucket_balance_audit_log;
 
 -- 建立分區父表 (Partitioned Table)
-CREATE TABLE public.bucket_balance_audit_log (
+CREATE TABLE earning.bucket_balance_audit_log (
     -- 稽核日誌自身的唯一ID
     id bigserial NOT NULL,
     
@@ -36,11 +36,11 @@ CREATE TABLE public.bucket_balance_audit_log (
 PARTITION BY RANGE (audit_timestamp);
 
 -- 建立索引 (這些索引會自動應用到所有子分區)
-CREATE INDEX idx_bbal_record_id ON public.bucket_balance_audit_log (record_id);
-CREATE INDEX idx_bbal_source_pk_gin ON public.bucket_balance_audit_log USING gin (source_record_pk);
+CREATE INDEX idx_bbal_record_id ON earning.bucket_balance_audit_log (record_id);
+CREATE INDEX idx_bbal_source_pk_gin ON earning.bucket_balance_audit_log USING gin (source_record_pk);
 
-COMMENT ON TABLE public.bucket_balance_audit_log IS '【分區父表】記錄 bucket_balances 表變更的稽核日誌。資料按日儲存在子分區中。';
-COMMENT ON COLUMN public.bucket_balance_audit_log.audit_timestamp IS '稽核事件時間戳，同時也是此表的分區鍵。';
+COMMENT ON TABLE earning.bucket_balance_audit_log IS '【分區父表】記錄 bucket_balances 表變更的稽核日誌。資料按日儲存在子分區中。';
+COMMENT ON COLUMN earning.bucket_balance_audit_log.audit_timestamp IS '稽核事件時間戳，同時也是此表的分區鍵。';
 
 
 
@@ -48,4 +48,4 @@ COMMENT ON COLUMN public.bucket_balance_audit_log.audit_timestamp IS '稽核事件時
 DROP TRIGGER IF EXISTS bucket_balances_audit_trigger ON earning.bucket_balances;
 CREATE TRIGGER bucket_balances_audit_trigger
 AFTER INSERT OR UPDATE OR DELETE ON earning.bucket_balances
-FOR EACH ROW EXECUTE FUNCTION public.log_balance_change_with_context();
+FOR EACH ROW EXECUTE FUNCTION earning.log_balance_change_with_context();
