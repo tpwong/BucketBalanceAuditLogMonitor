@@ -33,8 +33,7 @@ BEGIN
         'source_pk', pk_json
     );
 
-    -- 將 payload 存入名為 'my_app.source_info' 的事務級別變數中
-    PERFORM set_config('my_app.source_info', payload::TEXT, true);
+    PERFORM set_config('my_app.source_info', payload::TEXT, false);
 
     RETURN NEW;
 END;
