@@ -1,11 +1,12 @@
 -- ====================================================================
--- 步驟一：建立分區父表 (若您已執行過，可跳過此部分)
+-- 步驟一：安全地刪除舊的父表及其所有子分區
+-- 使用 CASCADE 會一併移除所有相依的物件，確保完全清除
 -- ====================================================================
+DROP TABLE IF EXISTS earning.bucket_balance_audit_log CASCADE;
 
--- 為了確保是全新的開始，先刪除舊表和相關函式
-DROP TABLE IF EXISTS earning.bucket_balance_audit_log;
-
--- 建立分區父表 (Partitioned Table)
+-- ====================================================================
+-- 步驟二：重新建立分區父表，包含 operator_account 欄位
+-- ====================================================================
 CREATE TABLE earning.bucket_balance_audit_log (
     -- 稽核日誌自身的唯一ID
     id bigserial NOT NULL,
@@ -34,19 +35,23 @@ CREATE TABLE earning.bucket_balance_audit_log (
     -- 來源資料表紀錄的主鍵
     source_record_pk jsonb,
 
+    -- 執行此次變更的操作人帳號
+    operator_account varchar(100),
+
     -- 將主鍵約束定義在最後，並包含分區鍵
     PRIMARY KEY (id, audit_timestamp)
 )
 PARTITION BY RANGE (audit_timestamp);
 
--- 建立索引 (這些索引會自動應用到所有子分區)
 CREATE INDEX idx_bbal_record_id ON earning.bucket_balance_audit_log (record_id);
 CREATE INDEX idx_bbal_source_pk_gin ON earning.bucket_balance_audit_log USING gin (source_record_pk);
+CREATE INDEX idx_bbal_operator_account ON earning.bucket_balance_audit_log (operator_account);
 
 COMMENT ON TABLE earning.bucket_balance_audit_log IS '【分區父表】記錄 bucket_balances 表變更的稽核日誌。資料按月儲存在子分區中。';
 COMMENT ON COLUMN earning.bucket_balance_audit_log.audit_timestamp IS '稽核事件時間戳，同時也是此表的分區鍵。';
-
-RAISE NOTICE '父表 earning.bucket_balance_audit_log 建立完成。';
+COMMENT ON COLUMN earning.bucket_balance_audit_log.source_table_name IS '觸發此次餘額變動的來源資料表名稱。';
+COMMENT ON COLUMN earning.bucket_balance_audit_log.source_record_pk IS '來源資料表紀錄的主鍵 (通常是 JSONB 格式)。';
+COMMENT ON COLUMN earning.bucket_balance_audit_log.operator_account IS '執行此次變更的操作人帳號（例如後台管理員ID或系統進程名）。';
 
 
 -- ====================================================================

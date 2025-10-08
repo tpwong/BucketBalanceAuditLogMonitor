@@ -1,4 +1,5 @@
-﻿CREATE OR REPLACE FUNCTION public.log_balance_change_with_context()
+﻿-- 更新後的函式，增加了讀取和寫入操作人帳號的邏輯
+CREATE OR REPLACE FUNCTION public.log_balance_change_with_context()
 RETURNS TRIGGER AS $$
 DECLARE
     v_record_id BIGINT;
@@ -6,6 +7,8 @@ DECLARE
     v_source_info JSONB;
     v_source_table_name TEXT;
     v_source_pk JSONB;
+    -- 新增變數來儲存操作人帳號
+    v_operator_account TEXT; 
 BEGIN
     -- 確定被操作的紀錄ID
     IF (TG_OP = 'DELETE') THEN
@@ -17,8 +20,12 @@ BEGIN
     -- 計算餘額變化量
     v_delta_balance := COALESCE(NEW.total, 0) - COALESCE(OLD.total, 0);
 
-    -- 嘗試讀取事務級別的變數
+    -- 嘗試讀取事務級別的變數 (來源交易資訊)
     v_source_info := current_setting('my_app.source_info', true)::JSONB;
+
+    -- *** 新增邏輯：嘗試讀取操作人帳號 ***
+    -- 我們使用一個新的鍵 'my_app.operator_account'
+    v_operator_account := current_setting('my_app.operator_account', true); -- true 表示如果沒設定也不會報錯
 
     -- 從變數中解析來源表名和主鍵
     IF v_source_info IS NOT NULL THEN
@@ -26,17 +33,17 @@ BEGIN
         v_source_pk := v_source_info -> 'source_pk';
     END IF;
 
-    -- *** 核心修改：使用 EXCEPTION 區塊來保護業務邏輯 ***
     BEGIN
         -- 嘗試寫入稽核日誌
-        INSERT INTO public.bucket_balance_audit_log (
+        INSERT INTO earning.bucket_balance_audit_log (
             action,
             record_id,
             old_balance,
             new_balance,
             delta_balance,
             source_table_name,
-            source_record_pk
+            source_record_pk,
+            operator_account -- 新增欄位
         ) VALUES (
             TG_OP,
             v_record_id,
@@ -44,18 +51,15 @@ BEGIN
             NEW.total,
             v_delta_balance,
             v_source_table_name,
-            v_source_pk
+            v_source_pk,
+            v_operator_account -- 新增的值
         );
     EXCEPTION
-        -- 當上面 BEGIN...END 區塊內發生任何錯誤時，執行這裡的程式碼
         WHEN OTHERS THEN
-            -- 將詳細的錯誤訊息以 NOTICE 級別輸出到 PostgreSQL 伺服器日誌中
-            -- 這不會中斷事務，但留下了排查問題的線索
             RAISE NOTICE 'AUDIT LOGGING FAILED: Could not write to bucket_balance_audit_log. Error: [%], Message: [%]', SQLSTATE, SQLERRM;
-            RAISE NOTICE 'AUDIT DATA (Lost): record_id=%, delta=%, source_table=%, source_pk=%', v_record_id, v_delta_balance, v_source_table_name, v_source_pk;
+            RAISE NOTICE 'AUDIT DATA (Lost): record_id=%, delta=%, source_table=%, source_pk=%, operator=%', v_record_id, v_delta_balance, v_source_table_name, v_source_pk, v_operator_account;
     END;
 
-    -- 無論稽核日誌是否寫入成功，函式都會繼續執行到這裡並正常返回
     IF (TG_OP = 'DELETE') THEN
         RETURN OLD;
     ELSE
