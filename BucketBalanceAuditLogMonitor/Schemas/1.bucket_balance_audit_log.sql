@@ -1,44 +1,44 @@
 -- ====================================================================
--- 步驟一：安全地刪除舊的父表及其所有子分區
--- 使用 CASCADE 會一併移除所有相依的物件，確保完全清除
+-- Step 1: Safely drop the old parent table and all its child partitions
+-- Using CASCADE will remove all dependent objects, ensuring complete cleanup
 -- ====================================================================
 DROP TABLE IF EXISTS earning.bucket_balance_audit_log CASCADE;
 
 -- ====================================================================
--- 步驟二：重新建立分區父表，包含 operator_account 欄位
+-- Step 2: Recreate the partitioned parent table, including operator_account field
 -- ====================================================================
 CREATE TABLE earning.bucket_balance_audit_log (
-    -- 稽核日誌自身的唯一ID
+    -- Unique ID for the audit log itself
     id bigserial NOT NULL,
     
-    -- 稽核事件發生的時間，這將是我們的分區鍵 (Partition Key)
+    -- Timestamp when the audit event occurred, this will be our partition key
     audit_timestamp timestamptz NOT NULL DEFAULT now(),
     
-    -- 操作類型 (INSERT, UPDATE, DELETE)
+    -- Operation type (INSERT, UPDATE, DELETE)
     action varchar(10) NOT NULL,
     
-    -- 被稽核的紀錄的主鍵 (bucket_balance.id)
+    -- Primary key of the audited record (bucket_balance.id)
     record_id bigint NOT NULL,
     
-    -- 紀錄變更前的金額
+    -- Record balance before change
     old_balance numeric(19, 9),
     
-    -- 紀錄變更後的金額
+    -- Record balance after change
     new_balance numeric(19, 9),
     
-    -- 紀錄此次變更的差額
+    -- Difference amount for this change
     delta_balance numeric(19, 9) NOT NULL,
     
-    -- 觸發此次餘額變動的來源資料表名稱
+    -- Source table name that triggered this balance change
     source_table_name varchar(100),
     
-    -- 來源資料表紀錄的主鍵
+    -- Primary key of the source table record
     source_record_pk jsonb,
 
-    -- 執行此次變更的操作人帳號
+    -- Operator account that performed this change
     operator_account varchar(100),
 
-    -- 將主鍵約束定義在最後，並包含分區鍵
+    -- Define primary key constraint at the end, including partition key
     PRIMARY KEY (id, audit_timestamp)
 )
 PARTITION BY RANGE (audit_timestamp);
@@ -47,45 +47,45 @@ CREATE INDEX idx_bbal_record_id ON earning.bucket_balance_audit_log (record_id);
 CREATE INDEX idx_bbal_source_pk_gin ON earning.bucket_balance_audit_log USING gin (source_record_pk);
 CREATE INDEX idx_bbal_operator_account ON earning.bucket_balance_audit_log (operator_account);
 
-COMMENT ON TABLE earning.bucket_balance_audit_log IS '【分區父表】記錄 bucket_balances 表變更的稽核日誌。資料按月儲存在子分區中。';
-COMMENT ON COLUMN earning.bucket_balance_audit_log.audit_timestamp IS '稽核事件時間戳，同時也是此表的分區鍵。';
-COMMENT ON COLUMN earning.bucket_balance_audit_log.source_table_name IS '觸發此次餘額變動的來源資料表名稱。';
-COMMENT ON COLUMN earning.bucket_balance_audit_log.source_record_pk IS '來源資料表紀錄的主鍵 (通常是 JSONB 格式)。';
-COMMENT ON COLUMN earning.bucket_balance_audit_log.operator_account IS '執行此次變更的操作人帳號（例如後台管理員ID或系統進程名）。';
+COMMENT ON TABLE earning.bucket_balance_audit_log IS '[Partitioned Parent Table] Audit log recording changes to bucket_balances table. Data is stored monthly in child partitions.';
+COMMENT ON COLUMN earning.bucket_balance_audit_log.audit_timestamp IS 'Audit event timestamp, also the partition key for this table.';
+COMMENT ON COLUMN earning.bucket_balance_audit_log.source_table_name IS 'Name of the source table that triggered this balance change.';
+COMMENT ON COLUMN earning.bucket_balance_audit_log.source_record_pk IS 'Primary key of the source table record (usually in JSONB format).';
+COMMENT ON COLUMN earning.bucket_balance_audit_log.operator_account IS 'Operator account that performed this change (e.g., backend admin ID or system process name).';
 
 
 -- ====================================================================
--- 步驟二：自動化腳本，建立從 2025-06 到 2030-12 的所有月度分區
+-- Step 3: Automated script to create all monthly partitions from 2025-06 to 2030-12
 -- ====================================================================
 DO $$
 DECLARE
-    -- 設定要建立分區的起始與結束月份 (取月份的第一天)
+    -- Set start and end months for partition creation (using first day of month)
     v_start_month date := '2025-06-01';
     v_end_month   date := '2030-12-01';
     
-    -- 用於迴圈的變數
+    -- Loop variables
     v_current_month date := v_start_month;
     v_partition_name text;
     v_partition_start text;
     v_partition_end text;
 BEGIN
-    RAISE NOTICE '開始建立從 % 到 % 的月度分區...', to_char(v_start_month, 'YYYY-MM'), to_char(v_end_month, 'YYYY-MM');
+    RAISE NOTICE 'Starting creation of monthly partitions from % to %...', to_char(v_start_month, 'YYYY-MM'), to_char(v_end_month, 'YYYY-MM');
 
-    -- 迴圈遍歷每個月
+    -- Loop through each month
     WHILE v_current_month <= v_end_month LOOP
-        -- 產生分區的名稱，格式為：bbal_log_YYYYMM (例如：bbal_log_202506)
+        -- Generate partition name in format: bbal_log_YYYYMM (e.g., bbal_log_202506)
         v_partition_name := 'bbal_log_' || to_char(v_current_month, 'YYYYMM');
         
-        -- 定義分區的起始範圍 (包含)
+        -- Define partition start range (inclusive)
         v_partition_start := to_char(v_current_month, 'YYYY-MM-DD');
         
-        -- 定義分區的結束範圍 (不包含)，即下個月的第一天
+        -- Define partition end range (exclusive), first day of next month
         v_partition_end := to_char(v_current_month + interval '1 month', 'YYYY-MM-DD');
         
-        -- 輸出正在建立的分區資訊
-        RAISE NOTICE '  -> 正在建立分區 earning.% FOR VALUES FROM ''%'' TO ''%'';', v_partition_name, v_partition_start, v_partition_end;
+        -- Output information about partition being created
+        RAISE NOTICE '  -> Creating partition earning.% FOR VALUES FROM ''%'' TO ''%'';', v_partition_name, v_partition_start, v_partition_end;
         
-        -- 使用 format() 函數安全地執行動態 SQL
+        -- Use format() function to safely execute dynamic SQL
         EXECUTE format(
             'CREATE TABLE earning.%I PARTITION OF earning.bucket_balance_audit_log FOR VALUES FROM (%L) TO (%L);',
             v_partition_name,
@@ -93,10 +93,10 @@ BEGIN
             v_partition_end
         );
         
-        -- 將當前月份推進到下個月的第一天
+        -- Advance current month to first day of next month
         v_current_month := v_current_month + interval '1 month';
     END LOOP;
 
-    RAISE NOTICE '所有月度分區建立完成！';
+    RAISE NOTICE 'All monthly partitions created successfully!';
 END;
 $$;

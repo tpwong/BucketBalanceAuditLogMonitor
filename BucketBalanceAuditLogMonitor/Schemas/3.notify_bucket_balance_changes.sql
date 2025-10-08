@@ -1,5 +1,5 @@
-﻿-- 更新後的函式，增加了讀取和寫入操作人帳號的邏輯
-CREATE OR REPLACE FUNCTION public.log_balance_change_with_context()
+﻿-- Updated function with added logic to read and write operator account
+CREATE OR REPLACE FUNCTION earning.log_balance_change_with_context()
 RETURNS TRIGGER AS $$
 DECLARE
     v_record_id BIGINT;
@@ -7,34 +7,34 @@ DECLARE
     v_source_info JSONB;
     v_source_table_name TEXT;
     v_source_pk JSONB;
-    -- 新增變數來儲存操作人帳號
+    -- New variable to store operator account
     v_operator_account TEXT; 
 BEGIN
-    -- 確定被操作的紀錄ID
+    -- Determine the record ID being operated on
     IF (TG_OP = 'DELETE') THEN
         v_record_id := OLD.id;
     ELSE
         v_record_id := NEW.id;
     END IF;
 
-    -- 計算餘額變化量
+    -- Calculate balance change amount
     v_delta_balance := COALESCE(NEW.total, 0) - COALESCE(OLD.total, 0);
 
-    -- 嘗試讀取事務級別的變數 (來源交易資訊)
-    v_source_info := current_setting('my_app.source_info', true)::JSONB;
+    -- Attempt to read transaction-level variable (source transaction info)
+    v_source_info := current_setting('earning_module.source_info', true)::JSONB;
 
-    -- *** 新增邏輯：嘗試讀取操作人帳號 ***
-    -- 我們使用一個新的鍵 'my_app.operator_account'
-    v_operator_account := current_setting('my_app.operator_account', true); -- true 表示如果沒設定也不會報錯
+    -- *** NEW LOGIC: Attempt to read operator account ***
+    -- We use a new key 'earning_module.operator_account'
+    v_operator_account := current_setting('earning_module.operator_account', true); -- true means no error if not set
 
-    -- 從變數中解析來源表名和主鍵
+    -- Parse source table name and primary key from the variable
     IF v_source_info IS NOT NULL THEN
         v_source_table_name := v_source_info ->> 'source_table';
         v_source_pk := v_source_info -> 'source_pk';
     END IF;
 
     BEGIN
-        -- 嘗試寫入稽核日誌
+        -- Attempt to write to audit log
         INSERT INTO earning.bucket_balance_audit_log (
             action,
             record_id,
@@ -43,7 +43,7 @@ BEGIN
             delta_balance,
             source_table_name,
             source_record_pk,
-            operator_account -- 新增欄位
+            operator_account
         ) VALUES (
             TG_OP,
             v_record_id,
@@ -52,7 +52,7 @@ BEGIN
             v_delta_balance,
             v_source_table_name,
             v_source_pk,
-            v_operator_account -- 新增的值
+            v_operator_account
         );
     EXCEPTION
         WHEN OTHERS THEN
@@ -69,7 +69,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 
--- 2. 在 bucket_balances 表上建立觸發器，並指向新的、簡化的日誌函式
+-- 2. Create trigger on bucket_balances table pointing to the new, simplified logging function
 DROP TRIGGER IF EXISTS bucket_balances_audit_trigger ON earning.bucket_balances;
 CREATE TRIGGER bucket_balances_audit_trigger
 AFTER INSERT OR UPDATE OR DELETE ON earning.bucket_balances
