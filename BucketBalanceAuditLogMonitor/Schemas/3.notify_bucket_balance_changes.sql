@@ -57,3 +57,10 @@ BEGIN
     END IF;
 END;
 $$ LANGUAGE plpgsql;
+
+
+-- 2. 在 bucket_balances 表上建立觸發器，並指向新的、簡化的日誌函式
+DROP TRIGGER IF EXISTS bucket_balances_audit_trigger ON earning.bucket_balances;
+CREATE TRIGGER bucket_balances_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON earning.bucket_balances
+FOR EACH ROW EXECUTE FUNCTION earning.log_balance_change_with_context();

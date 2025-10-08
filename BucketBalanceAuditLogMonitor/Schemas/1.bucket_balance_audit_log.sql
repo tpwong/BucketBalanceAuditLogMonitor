@@ -41,11 +41,3 @@ CREATE INDEX idx_bbal_source_pk_gin ON earning.bucket_balance_audit_log USING gi
 
 COMMENT ON TABLE earning.bucket_balance_audit_log IS '【分區父表】記錄 bucket_balances 表變更的稽核日誌。資料按日儲存在子分區中。';
 COMMENT ON COLUMN earning.bucket_balance_audit_log.audit_timestamp IS '稽核事件時間戳，同時也是此表的分區鍵。';
-
-
-
--- 2. 在 bucket_balances 表上建立觸發器，並指向新的、簡化的日誌函式
-DROP TRIGGER IF EXISTS bucket_balances_audit_trigger ON earning.bucket_balances;
-CREATE TRIGGER bucket_balances_audit_trigger
-AFTER INSERT OR UPDATE OR DELETE ON earning.bucket_balances
-FOR EACH ROW EXECUTE FUNCTION earning.log_balance_change_with_context();
