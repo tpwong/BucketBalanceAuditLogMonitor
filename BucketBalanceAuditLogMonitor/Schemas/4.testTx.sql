@@ -3,7 +3,7 @@ BEGIN;
 INSERT INTO earning.bucket_adjust_transactions
     (acct, gaming_dt, bucket_name, bucket_type, amount, remark)
 VALUES
-    ('25606235', now()::date, 'General Points', 'POINTS', 25.00, '客戶投訴補償');
+    ('25606235', now()::date, 'TierPoint_Base', 'Point', 25.00, '客戶投訴補償');
 -- >> trigger_store_source_adjust 觸發。
 
 -- 步驟 3: 更新對應的 bucket balance
@@ -24,7 +24,7 @@ BEGIN;
 INSERT INTO earning.bucket_redeem_transactions
     (id, acct, prize_code, gaming_dt, bucket_type, amount, post_dtm)
 VALUES
-    (uuid_generate_v4(), 'earning', 'PRIZE-COFFEE', now()::date, 'Point', 50.00, now());
+    (uuid_generate_v4(), '25606235', 'PRIZE-COFFEE', now()::date, 'Point', 50.00, now());
 -- >> trigger_store_source_redeem 觸發。
 
 -- 步驟 3: 更新對應的 bucket balance (扣除點數)
